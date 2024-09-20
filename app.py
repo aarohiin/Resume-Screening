@@ -2,76 +2,72 @@ import streamlit as st
 import pickle
 import re
 import nltk
+from PyPDF2 import PdfReader
+import os
 
-nltk.download('punkt')
-nltk.download('stopwords')
+# Download NLTK data
+nltk.download('punkt', quiet=True)
+nltk.download('stopwords', quiet=True)
 
-#loading models
-clf = pickle.load(open('C:/Users/aaroh/OneDrive/Desktop/hy/clf.pkl','rb'))
-tfidfd = pickle.load(open('C:/Users/aaroh/OneDrive/Desktop/hy/tfidf.pkl','rb'))
+# Load models using relative paths
+@st.cache_resource
+def load_models():
+    with open('clf.pkl', 'rb') as f:
+        clf = pickle.load(f)
+    with open('tfidf.pkl', 'rb') as f:
+        tfidf = pickle.load(f)
+    return clf, tfidf
+
+clf, tfidf = load_models()
 
 def clean_resume(resume_text):
     clean_text = re.sub('http\S+\s*', ' ', resume_text)
     clean_text = re.sub('RT|cc', ' ', clean_text)
     clean_text = re.sub('#\S+', '', clean_text)
-    clean_text = re.sub('@\S+', '  ', clean_text)
+    clean_text = re.sub('@\S+', ' ', clean_text)
     clean_text = re.sub('[%s]' % re.escape("""!"#$%&'()*+,-./:;<=>?@[\]^_`{|}~"""), ' ', clean_text)
     clean_text = re.sub(r'[^\x00-\x7f]', r' ', clean_text)
     clean_text = re.sub('\s+', ' ', clean_text)
     return clean_text
-# web app
+
+def extract_text_from_pdf(file):
+    pdf_reader = PdfReader(file)
+    text = ""
+    for page in pdf_reader.pages:
+        text += page.extract_text()
+    return text
+
 def main():
-    st.title("Aarohi's Resume Screening")
-    uploaded_file = st.file_uploader('Upload Resume', type=['txt','pdf'])
+    st.title("Resume Screening App")
+    uploaded_file = st.file_uploader('Upload Resume', type=['txt', 'pdf'])
 
     if uploaded_file is not None:
         try:
-            resume_bytes = uploaded_file.read()
-            resume_text = resume_bytes.decode('utf-8')
+            if uploaded_file.type == "application/pdf":
+                resume_text = extract_text_from_pdf(uploaded_file)
+            else:
+                resume_text = uploaded_file.read().decode('utf-8')
         except UnicodeDecodeError:
-            # If UTF-8 decoding fails, try decoding with 'latin-1'
-            resume_text = resume_bytes.decode('latin-1')
+            resume_text = uploaded_file.read().decode('latin-1')
 
         cleaned_resume = clean_resume(resume_text)
-        input_features = tfidfd.transform([cleaned_resume])
+        input_features = tfidf.transform([cleaned_resume])
         prediction_id = clf.predict(input_features)[0]
-        st.write(prediction_id)
 
-        # Map category ID to category name
         category_mapping = {
-            15: "Java Developer",
-            23: "Testing",
-            8: "DevOps Engineer",
-            20: "Python Developer",
-            24: "Web Designing",
-            12: "HR",
-            13: "Hadoop",
-            3: "Blockchain",
-            10: "ETL Developer",
-            18: "Operations Manager",
-            6: "Data Science",
-            22: "Sales",
-            16: "Mechanical Engineer",
-            1: "Arts",
-            7: "Database",
-            11: "Electrical Engineering",
-            14: "Health and fitness",
-            19: "PMO",
-            4: "Business Analyst",
-            9: "DotNet Developer",
-            2: "Automation Testing",
-            17: "Network Security Engineer",
-            21: "SAP Developer",
-            5: "Civil Engineer",
-            0: "Advocate",
+            15: "Java Developer", 23: "Testing", 8: "DevOps Engineer",
+            20: "Python Developer", 24: "Web Designing", 12: "HR",
+            13: "Hadoop", 3: "Blockchain", 10: "ETL Developer",
+            18: "Operations Manager", 6: "Data Science", 22: "Sales",
+            16: "Mechanical Engineer", 1: "Arts", 7: "Database",
+            11: "Electrical Engineering", 14: "Health and fitness",
+            19: "PMO", 4: "Business Analyst", 9: "DotNet Developer",
+            2: "Automation Testing", 17: "Network Security Engineer",
+            21: "SAP Developer", 5: "Civil Engineer", 0: "Advocate",
         }
 
         category_name = category_mapping.get(prediction_id, "Unknown")
-
         st.write("Predicted Category:", category_name)
 
-
-
-# python main
 if __name__ == "__main__":
     main()
